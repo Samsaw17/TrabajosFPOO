@@ -26,7 +26,8 @@ class Jugador(Personaje):
         self.puntos  = 0
         self.tiempo  = 300
         self.dispara = False
-        self.direccion = "derecha"  
+        self.direccion = "derecha"
+        self.saltando = False 
 
 class Game:
     def __init__(self):
@@ -122,7 +123,8 @@ class Game:
             self.canvas.itemconfig(p.canvas_id, image=self.imgs[img])
 
         elif k == "Up":
-            self.jump(p)
+            if not p.saltando:
+                self.jump(p)
 
         self.update_stats(p)
 
@@ -137,6 +139,9 @@ class Game:
             self.canvas.itemconfig(p.canvas_id, image=self.imgs[img])
 
     def jump(self, p):
+        if p.saltando:
+            return
+        p.saltando = True
         paso = JUMP_HEIGHT // JUMP_STEPS
         img = "saltando" if p.direccion == "derecha" else "saltandoI"
         img_fin = "inicial" if p.direccion == "derecha" else "inicialI"
@@ -159,6 +164,7 @@ class Game:
                 self.root.after(20, lambda: bajar(i+1))
             else:
                 self.canvas.itemconfig(p.canvas_id, image=self.imgs[img_fin])
+                p.saltando = False
 
         subir()
 
