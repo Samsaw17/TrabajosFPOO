@@ -1,204 +1,232 @@
-# Lógica de Negocio
+import pygame
 import random
-import tkinter as tk
-from PIL import Image, ImageTk
-from Personaje import Jugador
+import time
+from Personaje import Jugador, Enemigo
 
-# Constantes
-PASO_X      = 10
+# Constantes del juego
+PASO_X = 10
 JUMP_HEIGHT = 100
-JUMP_STEPS  = 10
-
+JUMP_STEPS = 10
 ASSETS_DIR = "assets/images/"
+WIDTH, HEIGHT = 800, 477
+GROUND_Y = 400  # Ajustado a la plataforma verde del nuevo fondo
 
 class Game:
     def __init__(self):
-        # --- Ventana y menú ---
-        self.root = tk.Tk()
-        self.root.title("Juego de Mario")
+        pygame.init()
+        pygame.display.set_caption("Juego de Mario")
+        self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
+        self.clock = pygame.time.Clock()
+        self.running = True
 
-        self.menu = tk.Frame(self.root)
-        tk.Label(self.menu, text="Mi Juego", font=("Arial",24)).pack(pady=20)
-        tk.Button(self.menu, text="Iniciar", command=self.start_game).pack()
-        self.menu.pack(fill="both", expand=True)
-
-        # Preparo canvas, pero lo mostraré en start_game()
-        self.ancho = 800
-        self.alto = 400
-        self.canvas = tk.Canvas(self.root, width=self.ancho, height=self.alto, bg="white")
-
-        # Cargo sprites
         self.imgs = {}
         self.load_images()
 
-        # Lista de jugadores y sus textos de stats
         self.players = []
-        self.stats_texts = {}
+        self.font = pygame.font.SysFont("Arial", 20)
 
-        # Teclado
-        self.root.bind("<Key>", self.on_key)
-        self.root.bind("<KeyRelease>", self.on_key_release)
-
-    def load_images(self):
-        # Sprites del personaje (nombres exactos de imagen como en Tablero Mejor.py)
-        self.imgs["inicial"]   = ImageTk.PhotoImage(Image.open(ASSETS_DIR + "1.png").resize((50,50)))
-        self.imgs["inicialGrande"] = ImageTk.PhotoImage(Image.open(ASSETS_DIR + "1.png").resize((60,60)))
-        self.imgs["inicialI"]  = ImageTk.PhotoImage(Image.open(ASSETS_DIR + "1i.png").resize((50,50)))
-        self.imgs["inicialGrandeI"] = ImageTk.PhotoImage(Image.open(ASSETS_DIR + "1i.png").resize((60,60)))
-        self.imgs["izquierda"] = ImageTk.PhotoImage(Image.open(ASSETS_DIR + "2i.png").resize((50,50)))
-        self.imgs["izquierdaGrande"] = ImageTk.PhotoImage(Image.open(ASSETS_DIR + "2i.png").resize((60,60)))
-        self.imgs["derecha"]   = ImageTk.PhotoImage(Image.open(ASSETS_DIR + "2.png").resize((50,50)))
-        self.imgs["derechaGrande"] = ImageTk.PhotoImage(Image.open(ASSETS_DIR + "2.png").resize((60,60)))
-        self.imgs["agachado"]  = ImageTk.PhotoImage(Image.open(ASSETS_DIR + "4.png").resize((50,50)))
-        self.imgs["agachadoGrande"] = ImageTk.PhotoImage(Image.open(ASSETS_DIR + "4.png").resize((60,60)))
-        self.imgs["agachadoI"] = ImageTk.PhotoImage(Image.open(ASSETS_DIR + "4i.png").resize((50,50)))
-        self.imgs["agachadoGrandeI"] = ImageTk.PhotoImage(Image.open(ASSETS_DIR + "4i.png").resize((60,60)))
-        self.imgs["saltando"]  = ImageTk.PhotoImage(Image.open(ASSETS_DIR + "5.png").resize((50,50)))
-        self.imgs["saltandoGrande"] = ImageTk.PhotoImage(Image.open(ASSETS_DIR + "5.png").resize((60,60)))
-        self.imgs["saltandoI"] = ImageTk.PhotoImage(Image.open(ASSETS_DIR + "5i.png").resize((50,50)))
-        self.imgs["saltandoGrandeI"] = ImageTk.PhotoImage(Image.open(ASSETS_DIR + "5i.png").resize((60,60)))
-
-        # Ítems
-        self.imgs["hongoRojo"]   = ImageTk.PhotoImage(Image.open(ASSETS_DIR + "hongoRojo.png").resize((40, 40)))
-        self.imgs["hongoVerde"]  = ImageTk.PhotoImage(Image.open(ASSETS_DIR + "hongoVerde.png").resize((40, 40)))
-
-    def start_game(self):
-        # destruyo menú, muestro canvas y creo jugadores
-        self.menu.destroy()
-        self.canvas.pack(pady=20)
-
-        p1 = Jugador(1, "Jugador1", self.ancho//2, self.alto//2)
+        # Jugador principal
+        p1 = Jugador(1, "Jugador1", 200, GROUND_Y)
         self.add_player(p1, "inicial")
 
-        # Calcular random posición para los hongos entre 0 y 800
-        posicionX = random.randint(0, self.ancho-40)
-        self.hongoRojo = self.canvas.create_image(posicionX, self.alto // 2, image=self.imgs["hongoRojo"])
+        # Enemigos
+        self.enemigos = []
+        goomba = Enemigo(100, "Goomba1", x=600, y=GROUND_Y)
+        self.enemigos.append(goomba)
 
-        posicionX = random.randint(0, self.ancho-40)
-        self.hongoVerde = self.canvas.create_image(posicionX, self.alto // 2, image=self.imgs["hongoVerde"])
+        # Ítems
+        self.hongoRojo = self.spawn_item("hongoRojo")
+        self.hongoVerde = self.spawn_item("hongoVerde")
 
-    def add_player(self, p, img_key):
-        # sprite
-        pid = self.canvas.create_image(p.posicionX, p.posicionY, image=self.imgs[img_key])
-        p.canvas_id = pid
-        self.players.append(p)
+        self.enemigos_aplastados = {}
 
-        # stats
-        txts = {}
-        x0 = 10 + (p.id-1)*150
-        for i, attr in enumerate(("posicionX","posicionY","vidas","monedas","puntos","tiempo")):
-            txts[attr] = self.canvas.create_text(
-                x0, 10 + i*20, anchor="nw",
-                text=f"{attr}: {getattr(p,attr)}"
-            )
-        self.stats_texts[p.id] = txts
+    def load_images(self):
+        def load_img(name, size):
+            return pygame.transform.scale(pygame.image.load(ASSETS_DIR + name), size)
 
-    def update_stats(self, p):
-        for attr, tid in self.stats_texts[p.id].items():
-            self.canvas.itemconfig(tid, text=f"{attr}: {getattr(p,attr)}")
+        self.imgs["fondo"] = pygame.image.load(ASSETS_DIR + "FondoMundo.png")  # Fondo 800x477
 
-    def on_key(self, ev):
-        if not self.players:
-            return
-        p = self.players[0]
-        k = ev.keysym
+        self.imgs["inicial"] = load_img("1.png", (50, 50))
+        self.imgs["inicialGrande"] = load_img("1.png", (60, 60))
+        self.imgs["inicialI"] = load_img("1i.png", (50, 50))
+        self.imgs["inicialGrandeI"] = load_img("1i.png", (60, 60))
+        self.imgs["izquierda"] = load_img("2i.png", (50, 50))
+        self.imgs["izquierdaGrande"] = load_img("2i.png", (60, 60))
+        self.imgs["derecha"] = load_img("2.png", (50, 50))
+        self.imgs["derechaGrande"] = load_img("2.png", (60, 60))
+        self.imgs["agachado"] = load_img("4.png", (50, 50))
+        self.imgs["agachadoGrande"] = load_img("4.png", (60, 60))
+        self.imgs["agachadoI"] = load_img("4i.png", (50, 50))
+        self.imgs["agachadoGrandeI"] = load_img("4i.png", (60, 60))
+        self.imgs["saltando"] = load_img("5.png", (50, 50))
+        self.imgs["saltandoGrande"] = load_img("5.png", (60, 60))
+        self.imgs["saltandoI"] = load_img("5i.png", (50, 50))
+        self.imgs["saltandoGrandeI"] = load_img("5i.png", (60, 60))
+        self.imgs["hongoRojo"] = load_img("hongoRojo.png", (40, 40))
+        self.imgs["hongoVerde"] = load_img("hongoVerde.png", (40, 40))
+        self.imgs["goomba"] = load_img("goombas.png", (40, 40))
+        self.imgs["goombaMuerto"] = load_img("goombas_muerte.png", (40, 30))
 
-        if k == "Right":
-            if p.posicionX + PASO_X <= self.ancho - 20:
-                p.direccion = "derecha"
-                self.canvas.itemconfig(p.canvas_id, image=self.imgs["derecha"])
-                p.mover(dx=PASO_X)
-                self.canvas.move(p.canvas_id, PASO_X, 0)
-                self.root.after(100, lambda: self.canvas.itemconfig(p.canvas_id, image=self.imgs["inicial"]))
+    def spawn_item(self, key):
+        x = random.randint(0, WIDTH - 40)
+        y = GROUND_Y
+        return {"img": self.imgs[key], "pos": [x, y]}
 
-        elif k == "Left":
-            if p.posicionX - PASO_X >= 20:
-                p.direccion = "izquierda"
-                self.canvas.itemconfig(p.canvas_id, image=self.imgs["izquierda"])
-                p.mover(dx=-PASO_X)
-                self.canvas.move(p.canvas_id, -PASO_X, 0)
-                self.root.after(100, lambda: self.canvas.itemconfig(p.canvas_id, image=self.imgs["inicialI"]))
+    def add_player(self, jugador, img_key):
+        jugador.image_key = img_key
+        self.players.append(jugador)
 
-        elif k == "Down":
-            img = "agachado" if p.direccion == "derecha" else "agachadoI"
-            self.canvas.itemconfig(p.canvas_id, image=self.imgs[img])
+    def update_stats(self, jugador):
+        y = 10
+        for attr in ("posicionX", "posicionY", "vidas", "monedas", "puntos", "tiempo"):
+            texto = f"{attr}: {getattr(jugador, attr)}"
+            texto_img = self.font.render(texto, True, (0, 0, 0))
+            self.screen.blit(texto_img, (10, y))
+            y += 20
 
-        elif k == "Up":
-            if not p.saltando:
-                self.jump(p)
+    def draw(self):
+        self.screen.blit(self.imgs["fondo"], (0, 0))
 
-        self.update_stats(p)
-        self.check_collisions(p)
+        if self.hongoRojo:
+            self.screen.blit(self.hongoRojo["img"], self.hongoRojo["pos"])
+        if self.hongoVerde:
+            self.screen.blit(self.hongoVerde["img"], self.hongoVerde["pos"])
 
-    def on_key_release(self, ev):
-        if not self.players:
-            return
-        p = self.players[0]
-        k = ev.keysym
+        current_time = time.time()
+        for enemigo in self.enemigos:
+            if not enemigo.vivo and enemigo.id in self.enemigos_aplastados:
+                if current_time - self.enemigos_aplastados[enemigo.id] > 5:
+                    continue
+            img = self.imgs[enemigo.image_key]
+            self.screen.blit(img, (enemigo.posicionX, enemigo.posicionY))
 
-        if k == "Down":
-            img = "inicial" if p.direccion == "derecha" else "inicialI"
-            self.canvas.itemconfig(p.canvas_id, image=self.imgs[img])
+        for jugador in self.players:
+            img = self.imgs[jugador.image_key]
+            self.screen.blit(img, (jugador.posicionX, jugador.posicionY))
+            self.update_stats(jugador)
 
-    def jump(self, p):
-        if p.saltando:
-            return
-        p.saltando = True
+        pygame.display.flip()
+
+    def handle_input(self):
+        keys = pygame.key.get_pressed()
+        jugador = self.players[0]
+
+        limite_derecho = 740 - (60 if jugador.tamano == "grande" else 50)
+        if keys[pygame.K_RIGHT] and jugador.posicionX + PASO_X <= limite_derecho:
+            jugador.direccion = "derecha"
+            jugador.image_key = "derechaGrande" if jugador.tamano == 'grande' else "derecha"
+            jugador.mover(dx=PASO_X)
+
+        if keys[pygame.K_LEFT] and jugador.posicionX - PASO_X >= 10:
+            jugador.direccion = "izquierda"
+            jugador.image_key = "izquierdaGrande" if jugador.tamano == 'grande' else "izquierda"
+            jugador.mover(dx=-PASO_X)
+
+        elif keys[pygame.K_DOWN]:
+            if jugador.tamano == 'grande':
+                jugador.image_key = "agachadoGrande" if jugador.direccion == "derecha" else "agachadoGrandeI"
+            else:
+                jugador.image_key = "agachado" if jugador.direccion == "derecha" else "agachadoI"
+
+        elif keys[pygame.K_UP] and not jugador.saltando:
+            self.saltar(jugador)
+
+    def handle_events(self):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self.running = False
+            elif event.type == pygame.KEYUP:
+                jugador = self.players[0]
+                if event.key in (pygame.K_DOWN, pygame.K_RIGHT, pygame.K_LEFT) and not jugador.saltando:
+                    if jugador.tamano == 'grande':
+                        jugador.image_key = "inicialGrande" if jugador.direccion == "derecha" else "inicialGrandeI"
+                    else:
+                        jugador.image_key = "inicial" if jugador.direccion == "derecha" else "inicialI"
+
+    def saltar(self, jugador):
+        jugador.saltando = True
         paso = JUMP_HEIGHT // JUMP_STEPS
-        img = "saltando" if p.direccion == "derecha" else "saltandoI"
-        img_fin = "inicial" if p.direccion == "derecha" else "inicialI"
-        self.canvas.itemconfig(p.canvas_id, image=self.imgs[img])
+        direccion = jugador.direccion
 
-        def subir(i=0):
-            if i < JUMP_STEPS:
-                p.mover(dy=-paso)
-                self.canvas.move(p.canvas_id, 0, -paso)
-                self.update_stats(p)
-                self.root.after(20, lambda: subir(i+1))
-            else:
-                bajar()
+        jugador.image_key = (
+            "saltandoGrande" if direccion == "derecha" else "saltandoGrandeI"
+            if jugador.tamano == "grande"
+            else "saltando" if direccion == "derecha" else "saltandoI"
+        )
 
-        def bajar(i=0):
-            if i < JUMP_STEPS:
-                p.mover(dy=paso)
-                self.canvas.move(p.canvas_id, 0, paso)
-                self.update_stats(p)
-                self.root.after(20, lambda: bajar(i+1))
-            else:
-                self.canvas.itemconfig(p.canvas_id, image=self.imgs[img_fin])
-                p.saltando = False
+        for _ in range(JUMP_STEPS):
+            jugador.mover(dy=-paso)
+            self.check_collisions(jugador)
+            self.draw()
+            self.clock.tick(60)
 
-        subir()
+        for _ in range(JUMP_STEPS):
+            jugador.mover(dy=paso)
+            self.check_collisions(jugador)
+            self.draw()
+            self.clock.tick(60)
 
-    def check_collisions(self, p):
-        coords_p = self.canvas.coords(p.canvas_id)
-        if hasattr(self, "hongoRojo"):
-            coords_h = self.canvas.coords(self.hongoRojo)
-            if abs(coords_p[0] - coords_h[0]) < 30 and abs(coords_p[1] - coords_h[1]) < 30:
-                self.canvas.delete(self.hongoRojo)
-                del self.hongoRojo
-                self.crecer_personaje(p)
-        if hasattr(self, "hongoVerde"):
-            coords_h = self.canvas.coords(self.hongoVerde)
-            if abs(coords_p[0] - coords_h[0]) < 30 and abs(coords_p[1] - coords_h[1]) < 30:
-                self.canvas.delete(self.hongoVerde)
-                del self.hongoVerde
-                p.vidas += 1
-                self.update_stats(p)
+        jugador.saltando = False
+        jugador.image_key = (
+            "inicialGrande" if jugador.direccion == "derecha" else "inicialGrandeI"
+            if jugador.tamano == "grande"
+            else "inicial" if jugador.direccion == "derecha" else "inicialI"
+        )
+        jugador.posicionY = GROUND_Y
 
-    def crecer_personaje(self, p):
-        self.imgs["inicial"] = self.imgs["inicialGrande"]
-        self.imgs["inicialI"] = self.imgs["inicialGrandeI"]
-        self.imgs["derecha"] = self.imgs["derechaGrande"]
-        self.imgs["izquierda"] = self.imgs["izquierdaGrande"]
-        self.imgs["agachado"] = self.imgs["agachadoGrande"]
-        self.imgs["agachadoI"] = self.imgs["agachadoGrandeI"]
-        self.imgs["saltando"] = self.imgs["saltandoGrande"]
-        self.imgs["saltandoI"] = self.imgs["saltandoGrandeI"]
+    def check_collisions(self, jugador):
+        jugador_height = 60 if jugador.tamano == "grande" else 50
+        jugador_rect = pygame.Rect(jugador.posicionX, jugador.posicionY, 50, jugador_height)
+
+        if self.hongoRojo:
+            hongo_rect = pygame.Rect(*self.hongoRojo["pos"], 40, 40)
+            if jugador_rect.colliderect(hongo_rect):
+                self.hongoRojo = None
+                self.crecer_personaje(jugador)
+
+        if self.hongoVerde:
+            hongo_rect = pygame.Rect(*self.hongoVerde["pos"], 40, 40)
+            if jugador_rect.colliderect(hongo_rect):
+                self.hongoVerde = None
+                jugador.vidas += 1
+
+        current_time = time.time()
+        self.enemigos = [e for e in self.enemigos if e.id not in self.enemigos_aplastados or current_time - self.enemigos_aplastados[e.id] <= 5]
+
+        for enemigo in self.enemigos:
+            if not enemigo.vivo:
+                continue
+
+            enemigo_rect = pygame.Rect(enemigo.posicionX, enemigo.posicionY, 40, 40)
+
+            if jugador_rect.colliderect(enemigo_rect):
+                if jugador_rect.bottom <= enemigo_rect.top + 10 and jugador.saltando:
+                    enemigo.aplastar()
+                    jugador.puntos += 100
+                    self.enemigos_aplastados[enemigo.id] = current_time
+
+    def crecer_personaje(self, jugador):
+        jugador.tamano = 'grande'
+        if jugador.direccion == "derecha":
+            jugador.image_key = "inicialGrande"
+        else:
+            jugador.image_key = "inicialGrandeI"
 
     def run(self):
-        self.root.mainloop()
+        while self.running:
+            self.clock.tick(60)
+            self.handle_events()
+            self.handle_input()
+
+            for enemigo in self.enemigos:
+                if enemigo.vivo:
+                    enemigo.mover_automatico()
+
+            self.check_collisions(self.players[0])
+            self.draw()
+
+        pygame.quit()
 
 if __name__ == "__main__":
     game = Game()
-    game.run() 
+    game.run()
