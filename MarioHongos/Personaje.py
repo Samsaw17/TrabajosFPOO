@@ -13,7 +13,7 @@ class Personaje:
 class Enemigo(Personaje):
     def __init__(self, id, nombre, x=0, y=0, velocidad=2):
         super().__init__(id, nombre, x, y)
-        self.direccion = "izquierda"
+        self.direccion = "izquierda"  # Siempre se mueve hacia la izquierda
         self.velocidad = velocidad
         self.vivo = True
         self.image_key = "goomba"
@@ -21,21 +21,17 @@ class Enemigo(Personaje):
     def mover_automatico(self):
         if not self.vivo:
             return
-        if self.direccion == "izquierda":
-            self.posicionX -= self.velocidad
-        else:
-            self.posicionX += self.velocidad
-
-        # Cambiar dirección si toca los bordes
-        if self.posicionX <= 10:
-            self.direccion = "derecha"
-        elif self.posicionX >= 740:
-            self.direccion = "izquierda"
+            
+        # Movimiento constante hacia la izquierda
+        self.posicionX -= self.velocidad
+        
+        # Reaparece por la derecha si sale completamente por la izquierda
+        if self.posicionX <= -40:
+            self.posicionX = 800
 
     def aplastar(self):
         self.vivo = False
         self.image_key = "goombaMuerto"
-
 
 class Jugador(Personaje):
     def __init__(self, id, nombre, x=0, y=0):

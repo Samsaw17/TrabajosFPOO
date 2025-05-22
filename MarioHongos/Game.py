@@ -9,7 +9,7 @@ JUMP_HEIGHT = 100
 JUMP_STEPS = 10
 ASSETS_DIR = "assets/images/"
 WIDTH, HEIGHT = 800, 477
-GROUND_Y = 400  # Ajustado a la plataforma verde del nuevo fondo
+GROUND_Y = 333 
 
 class Game:
     def __init__(self):
@@ -31,7 +31,7 @@ class Game:
 
         # Enemigos
         self.enemigos = []
-        goomba = Enemigo(100, "Goomba1", x=600, y=GROUND_Y)
+        goomba = Enemigo(100, "Goomba1", x=600, y=346)
         self.enemigos.append(goomba)
 
         # Ítems
@@ -44,7 +44,7 @@ class Game:
         def load_img(name, size):
             return pygame.transform.scale(pygame.image.load(ASSETS_DIR + name), size)
 
-        self.imgs["fondo"] = pygame.image.load(ASSETS_DIR + "FondoMundo.png")  # Fondo 800x477
+        self.imgs["fondo"] = pygame.image.load(ASSETS_DIR + "FondoMundo.png")
 
         self.imgs["inicial"] = load_img("1.png", (50, 50))
         self.imgs["inicialGrande"] = load_img("1.png", (60, 60))
@@ -69,7 +69,7 @@ class Game:
 
     def spawn_item(self, key):
         x = random.randint(0, WIDTH - 40)
-        y = GROUND_Y
+        y = 350
         return {"img": self.imgs[key], "pos": [x, y]}
 
     def add_player(self, jugador, img_key):
@@ -144,35 +144,32 @@ class Game:
                         jugador.image_key = "inicial" if jugador.direccion == "derecha" else "inicialI"
 
     def saltar(self, jugador):
-        jugador.saltando = True
-        paso = JUMP_HEIGHT // JUMP_STEPS
-        direccion = jugador.direccion
+        if not hasattr(jugador, 'pasos_salto'):
+            jugador.pasos_salto = 0
+            jugador.saltando = True
+            paso = JUMP_HEIGHT // JUMP_STEPS
+            direccion = jugador.direccion
 
-        jugador.image_key = (
-            "saltandoGrande" if direccion == "derecha" else "saltandoGrandeI"
-            if jugador.tamano == "grande"
-            else "saltando" if direccion == "derecha" else "saltandoI"
-        )
+            if jugador.tamano == "grande":
+                jugador.image_key = "saltandoGrande" if direccion == "derecha" else "saltandoGrandeI"
+            else:
+                jugador.image_key = "saltando" if direccion == "derecha" else "saltandoI"
 
-        for _ in range(JUMP_STEPS):
-            jugador.mover(dy=-paso)
-            self.check_collisions(jugador)
-            self.draw()
-            self.clock.tick(60)
-
-        for _ in range(JUMP_STEPS):
-            jugador.mover(dy=paso)
-            self.check_collisions(jugador)
-            self.draw()
-            self.clock.tick(60)
-
-        jugador.saltando = False
-        jugador.image_key = (
-            "inicialGrande" if jugador.direccion == "derecha" else "inicialGrandeI"
-            if jugador.tamano == "grande"
-            else "inicial" if jugador.direccion == "derecha" else "inicialI"
-        )
-        jugador.posicionY = GROUND_Y
+        if jugador.pasos_salto < JUMP_STEPS * 2:
+            if jugador.pasos_salto < JUMP_STEPS:
+                jugador.mover(dy=-(JUMP_HEIGHT // JUMP_STEPS))  # Subida
+            else:
+                jugador.mover(dy=(JUMP_HEIGHT // JUMP_STEPS))  # Bajada
+            
+            jugador.pasos_salto += 1
+        else:
+            jugador.saltando = False
+            del jugador.pasos_salto
+            jugador.posicionY = GROUND_Y
+            if jugador.tamano == "grande":
+                jugador.image_key = "inicialGrande" if jugador.direccion == "derecha" else "inicialGrandeI"
+            else:
+                jugador.image_key = "inicial" if jugador.direccion == "derecha" else "inicialI"
 
     def check_collisions(self, jugador):
         jugador_height = 60 if jugador.tamano == "grande" else 50
@@ -218,9 +215,14 @@ class Game:
             self.handle_events()
             self.handle_input()
 
+            # Mover enemigos independientemente del estado del jugador
             for enemigo in self.enemigos:
                 if enemigo.vivo:
                     enemigo.mover_automatico()
+
+            # Actualizar salto si está ocurriendo
+            if hasattr(self.players[0], 'pasos_salto'):
+                self.saltar(self.players[0])
 
             self.check_collisions(self.players[0])
             self.draw()
