@@ -111,13 +111,13 @@ class Game:
         keys = pygame.key.get_pressed()
         jugador = self.players[0]
 
-        limite_derecho = 740 - (60 if jugador.tamano == "grande" else 50)
+        limite_derecho = 800 - (60 if jugador.tamano == "grande" else 50)
         if keys[pygame.K_RIGHT] and jugador.posicionX + PASO_X <= limite_derecho:
             jugador.direccion = "derecha"
             jugador.image_key = "derechaGrande" if jugador.tamano == 'grande' else "derecha"
             jugador.mover(dx=PASO_X)
 
-        if keys[pygame.K_LEFT] and jugador.posicionX - PASO_X >= 10:
+        if keys[pygame.K_LEFT] and jugador.posicionX - PASO_X >= 0:
             jugador.direccion = "izquierda"
             jugador.image_key = "izquierdaGrande" if jugador.tamano == 'grande' else "izquierda"
             jugador.mover(dx=-PASO_X)
