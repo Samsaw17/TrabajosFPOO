@@ -12,7 +12,7 @@ WIDTH, HEIGHT = 800, 477
 GROUND_Y = 333
 GAME_OVER_FONT_SIZE = 72
 MENU_FONT_SIZE = 36
-MAX_MONEDAS = 10  # Máximo de monedas para obtener una vida
+MAX_MONEDAS = 10
 
 class Moneda:
     def __init__(self, x, y):
@@ -22,15 +22,6 @@ class Moneda:
         self.image_key = "moneda"
         self.ancho = 30
         self.alto = 30
-        self.tiempo_animacion = 0
-        self.frame_actual = 0
-    
-    def animar(self):
-        # Simple animación para hacer que las monedas giren (simulación)
-        self.tiempo_animacion += 1
-        if self.tiempo_animacion >= 10:  # Cada 10 frames
-            self.tiempo_animacion = 0
-            self.frame_actual = (self.frame_actual + 1) % 4  # 4 frames de animación
 
 class Game:
     def __init__(self):
@@ -195,7 +186,6 @@ class Game:
         # Dibujar monedas activas
         for moneda in self.monedas:
             if moneda.activa:
-                moneda.animar()  # Animar la moneda
                 self.screen.blit(self.imgs[moneda.image_key], (moneda.posicionX, moneda.posicionY))
 
         if self.hongoRojo:
@@ -449,7 +439,7 @@ class Game:
                     
             self.clock.tick(60)
             self.handle_events()
-            self.handle_input()# Mantener la actualización del temporizador por si deseas usar cuenta regresiva también
+            self.handle_input()
 
             for enemigo in self.enemigos:
                 if enemigo.vivo:
