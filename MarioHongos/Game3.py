@@ -13,6 +13,7 @@ GROUND_Y = 333
 GAME_OVER_FONT_SIZE = 72
 MENU_FONT_SIZE = 36
 MAX_MONEDAS = 10  # Máximo de monedas para obtener una vida
+TIEMPO_INICIAL = 60  # Tiempo inicial en segundos para la cuenta regresiva
 
 class Moneda:
     def __init__(self, x, y):
@@ -40,6 +41,9 @@ class Game:
         self.clock = pygame.time.Clock()
         self.running = True
         self.game_over = False
+        self.victory = False  # Variable para controlar la victoria
+        self.tiempo_restante = TIEMPO_INICIAL
+        self.ultimo_segundo = pygame.time.get_ticks() // 1000
 
         self.imgs = {}
         self.load_images()
@@ -90,7 +94,11 @@ class Game:
 
     def verificar_oleada_completada(self):
         if all(not goomba.vivo for goomba in self.enemigos):
-            self.spawn_oleada_goombas()
+            if self.goombas_eliminados_total >= self.max_goombas_total:
+                # Si ya eliminamos todos los goombas permitidos, victoria
+                self.victory = True
+            else:
+                self.spawn_oleada_goombas()
 
     def limpiar_enemigos_muertos(self):
         current_time = time.time()
@@ -177,6 +185,7 @@ class Game:
         ]
         
         for attr, value in stats:
+            # Color rojo para los goombas restantes cuando sean 0
             color = (255, 0, 0) if attr == "Goombas restantes" and goombas_restantes == 0 else (0, 0, 0)
             texto_img = self.font.render(f"{attr}: {value}", True, color)
             self.screen.blit(texto_img, (10, y))
@@ -322,6 +331,11 @@ class Game:
                     jugador.puntos += 100
                     self.enemigos_aplastados[enemigo.id] = current_time
                     self.goombas_eliminados_total += 1
+                    
+                    # Verificar si hemos eliminado todos los goombas
+                    if self.goombas_eliminados_total >= self.max_goombas_total:
+                        # Victoria al eliminar todos los goombas
+                        self.victory = True
                 else:
                     if jugador.tamano == "grande":
                         jugador.tamano = 'pequeño'
@@ -367,6 +381,48 @@ class Game:
                         return False
             self.clock.tick(60)
 
+    def show_victory_screen(self):
+        self.screen.fill((0, 0, 0))
+        
+        victory_text = self.game_over_font.render("¡GANASTE!", True, (0, 255, 0))
+        victory_rect = victory_text.get_rect(center=(WIDTH//2, HEIGHT//2 - 50))
+        self.screen.blit(victory_text, victory_rect)
+        
+        # Mostrar puntuación final
+        jugador = self.players[0]
+        score_text = self.menu_font.render(f"Puntuación: {jugador.puntos}", True, (255, 255, 255))
+        score_rect = score_text.get_rect(center=(WIDTH//2, HEIGHT//2))
+        self.screen.blit(score_text, score_rect)
+        
+        instruction_text = self.menu_font.render("Presiona ENTER para reiniciar", True, (255, 255, 255))
+        instruction_rect = instruction_text.get_rect(center=(WIDTH//2, HEIGHT//2 + 50))
+        self.screen.blit(instruction_text, instruction_rect)
+        
+        pygame.display.flip()
+        
+        waiting = True
+        while waiting:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    return False
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_RETURN:
+                        return True
+                    elif event.key == pygame.K_ESCAPE:
+                        return False
+            self.clock.tick(60)
+
+    def update_timer(self):
+        current_second = pygame.time.get_ticks() // 1000
+        if current_second > self.ultimo_segundo:
+            self.ultimo_segundo = current_second
+            if self.tiempo_restante > 0:
+                self.tiempo_restante -= 1
+                
+            # Si el tiempo llega a 0, el jugador gana
+            if self.tiempo_restante <= 0:
+                self.victory = True
+
     def reset_game(self):
         self.players = []
         p1 = Jugador(1, "Jugador1", 200, GROUND_Y)
@@ -386,7 +442,12 @@ class Game:
         self.hongoRojo = self.spawn_item("hongoRojo")
         self.hongoVerde = self.spawn_item("hongoVerde")
         
+        # Reiniciar el temporizador
+        self.tiempo_restante = TIEMPO_INICIAL
+        self.ultimo_segundo = pygame.time.get_ticks() // 1000
+        
         self.game_over = False
+        self.victory = False
 
     def run(self):
         while self.running:
@@ -396,10 +457,17 @@ class Game:
                 else:
                     self.running = False
                     break
+            elif self.victory:
+                if self.show_victory_screen():
+                    self.reset_game()
+                else:
+                    self.running = False
+                    break
                     
             self.clock.tick(60)
             self.handle_events()
             self.handle_input()
+            self.update_timer()  # Mantener la actualización del temporizador por si deseas usar cuenta regresiva también
 
             for enemigo in self.enemigos:
                 if enemigo.vivo:
@@ -411,7 +479,7 @@ class Game:
             self.verificar_oleada_completada()
             self.limpiar_enemigos_muertos()
             self.check_collisions(self.players[0])
-            self.check_monedas()  # Verificar estado de las monedas
+            self.check_monedas()
             self.draw()
 
         pygame.quit()
@@ -419,3 +487,4 @@ class Game:
 if __name__ == "__main__":
     game = Game()
     game.run()
+
