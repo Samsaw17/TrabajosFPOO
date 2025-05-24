@@ -1,4 +1,4 @@
-import pygame
+import pygame 
 import random
 import time
 from Personaje3 import Jugador, Enemigo
@@ -12,6 +12,25 @@ WIDTH, HEIGHT = 800, 477
 GROUND_Y = 333
 GAME_OVER_FONT_SIZE = 72
 MENU_FONT_SIZE = 36
+MAX_MONEDAS = 10  # Máximo de monedas para obtener una vida
+
+class Moneda:
+    def __init__(self, x, y):
+        self.posicionX = x
+        self.posicionY = y
+        self.activa = True
+        self.image_key = "moneda"
+        self.ancho = 30
+        self.alto = 30
+        self.tiempo_animacion = 0
+        self.frame_actual = 0
+    
+    def animar(self):
+        # Simple animación para hacer que las monedas giren (simulación)
+        self.tiempo_animacion += 1
+        if self.tiempo_animacion >= 10:  # Cada 10 frames
+            self.tiempo_animacion = 0
+            self.frame_actual = (self.frame_actual + 1) % 4  # 4 frames de animación
 
 class Game:
     def __init__(self):
@@ -43,6 +62,10 @@ class Game:
         self.goombas_por_oleada = 2
         self.goombas_eliminados_total = 0
         self.max_goombas_total = 10
+        
+        # Sistema de monedas
+        self.monedas = []
+        self.spawn_monedas(5)  # Generamos 5 monedas iniciales
         
         # Crear primera oleada de Goombas
         self.spawn_oleada_goombas()
@@ -82,6 +105,23 @@ class Game:
         for enemigo in enemigos_a_eliminar:
             self.enemigos.remove(enemigo)
 
+    def spawn_monedas(self, cantidad):
+        # Generar monedas en posiciones aleatorias pero alcanzables con un salto
+        # Considerando que JUMP_HEIGHT es 100 y el GROUND_Y es 333
+        # Las monedas deben estar a una altura máxima de GROUND_Y - JUMP_HEIGHT
+        min_altura = GROUND_Y - JUMP_HEIGHT + 30  # Ajuste para que sea alcanzable
+        
+        for _ in range(cantidad):
+            x = random.randint(100, WIDTH - 100)
+            # Alturas alcanzables durante el salto
+            y = random.randint(min_altura, GROUND_Y - 40)
+            self.monedas.append(Moneda(x, y))
+    
+    def check_monedas(self):
+        # Verificar si todas las monedas han sido recogidas
+        if not any(moneda.activa for moneda in self.monedas):
+            self.spawn_monedas(5)  # Generar nuevas monedas
+
     def load_images(self):
         def load_img(name, size):
             return pygame.transform.scale(pygame.image.load(ASSETS_DIR + name), size)
@@ -107,6 +147,8 @@ class Game:
         self.imgs["hongoVerde"] = load_img("hongoVerde.png", (40, 40))
         self.imgs["goomba"] = load_img("goombas.png", (40, 40))
         self.imgs["goombaMuerto"] = load_img("goombas_muerte.png", (40, 30))
+        # Cargar imagen de la moneda
+        self.imgs["moneda"] = load_img("moneda.png", (30, 30))
 
     def spawn_item(self, key):
         x = random.randint(0, WIDTH - 40)
@@ -142,6 +184,12 @@ class Game:
 
     def draw(self):
         self.screen.blit(self.imgs["fondo"], (0, 0))
+
+        # Dibujar monedas activas
+        for moneda in self.monedas:
+            if moneda.activa:
+                moneda.animar()  # Animar la moneda
+                self.screen.blit(self.imgs[moneda.image_key], (moneda.posicionX, moneda.posicionY))
 
         if self.hongoRojo:
             self.screen.blit(self.hongoRojo["img"], self.hongoRojo["pos"])
@@ -230,6 +278,21 @@ class Game:
         jugador_height = 60 if jugador.tamano == "grande" else 50
         jugador_rect = pygame.Rect(jugador.posicionX, jugador.posicionY, 50, jugador_height)
 
+        # Colisión con monedas
+        for moneda in self.monedas:
+            if moneda.activa:
+                moneda_rect = pygame.Rect(moneda.posicionX, moneda.posicionY, moneda.ancho, moneda.alto)
+                if jugador_rect.colliderect(moneda_rect):
+                    moneda.activa = False
+                    jugador.monedas += 1
+                    jugador.puntos += 50  # Añadir puntos por recoger moneda
+                    
+                    # Sistema de vida por monedas
+                    if jugador.monedas >= MAX_MONEDAS:
+                        jugador.vidas += 1
+                        jugador.monedas = 0
+                        # Efecto de sonido o visual aquí (opcional)
+
         if self.hongoRojo:
             hongo_rect = pygame.Rect(*self.hongoRojo["pos"], 40, 40)
             if jugador_rect.colliderect(hongo_rect):
@@ -314,6 +377,10 @@ class Game:
         self.goomba_id_counter = 1
         self.goombas_eliminados_total = 0
         
+        # Reiniciar sistema de monedas
+        self.monedas = []
+        self.spawn_monedas(5)
+        
         self.spawn_oleada_goombas()
         
         self.hongoRojo = self.spawn_item("hongoRojo")
@@ -344,6 +411,7 @@ class Game:
             self.verificar_oleada_completada()
             self.limpiar_enemigos_muertos()
             self.check_collisions(self.players[0])
+            self.check_monedas()  # Verificar estado de las monedas
             self.draw()
 
         pygame.quit()
