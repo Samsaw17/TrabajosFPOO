@@ -3,6 +3,7 @@ import random
 import time
 from Personaje3 import Jugador, Enemigo
 
+# Constantes
 PASO_X = 10
 JUMP_HEIGHT = 100
 JUMP_STEPS = 10
@@ -29,18 +30,24 @@ class Game:
         self.game_over_font = pygame.font.SysFont("Arial", GAME_OVER_FONT_SIZE, bold=True)
         self.menu_font = pygame.font.SysFont("Arial", MENU_FONT_SIZE)
 
+        # Jugador principal
         p1 = Jugador(1, "Jugador1", 200, GROUND_Y)
         self.add_player(p1, "inicial")
 
+        # Sistema de enemigos
         self.enemigos = []
         self.enemigos_aplastados = {}
         self.goomba_id_counter = 1
+        
+        # Control de spawneo
         self.goombas_por_oleada = 2
         self.goombas_eliminados_total = 0
         self.max_goombas_total = 10
         
+        # Crear primera oleada de Goombas
         self.spawn_oleada_goombas()
 
+        # Ítems
         self.hongoRojo = self.spawn_item("hongoRojo")
         self.hongoVerde = self.spawn_item("hongoVerde")
 
