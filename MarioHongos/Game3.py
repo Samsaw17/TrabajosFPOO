@@ -13,7 +13,6 @@ GROUND_Y = 333
 GAME_OVER_FONT_SIZE = 72
 MENU_FONT_SIZE = 36
 MAX_MONEDAS = 10  # Máximo de monedas para obtener una vida
-TIEMPO_INICIAL = 60  # Tiempo inicial en segundos para la cuenta regresiva
 
 class Moneda:
     def __init__(self, x, y):
@@ -42,7 +41,6 @@ class Game:
         self.running = True
         self.game_over = False
         self.victory = False  # Variable para controlar la victoria
-        self.tiempo_restante = TIEMPO_INICIAL
         self.ultimo_segundo = pygame.time.get_ticks() // 1000
 
         self.imgs = {}
@@ -412,17 +410,6 @@ class Game:
                         return False
             self.clock.tick(60)
 
-    def update_timer(self):
-        current_second = pygame.time.get_ticks() // 1000
-        if current_second > self.ultimo_segundo:
-            self.ultimo_segundo = current_second
-            if self.tiempo_restante > 0:
-                self.tiempo_restante -= 1
-                
-            # Si el tiempo llega a 0, el jugador gana
-            if self.tiempo_restante <= 0:
-                self.victory = True
-
     def reset_game(self):
         self.players = []
         p1 = Jugador(1, "Jugador1", 200, GROUND_Y)
@@ -441,10 +428,6 @@ class Game:
         
         self.hongoRojo = self.spawn_item("hongoRojo")
         self.hongoVerde = self.spawn_item("hongoVerde")
-        
-        # Reiniciar el temporizador
-        self.tiempo_restante = TIEMPO_INICIAL
-        self.ultimo_segundo = pygame.time.get_ticks() // 1000
         
         self.game_over = False
         self.victory = False
@@ -466,8 +449,7 @@ class Game:
                     
             self.clock.tick(60)
             self.handle_events()
-            self.handle_input()
-            self.update_timer()  # Mantener la actualización del temporizador por si deseas usar cuenta regresiva también
+            self.handle_input()# Mantener la actualización del temporizador por si deseas usar cuenta regresiva también
 
             for enemigo in self.enemigos:
                 if enemigo.vivo:
@@ -487,4 +469,3 @@ class Game:
 if __name__ == "__main__":
     game = Game()
     game.run()
-
