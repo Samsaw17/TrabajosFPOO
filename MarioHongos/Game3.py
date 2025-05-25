@@ -1,6 +1,7 @@
 import pygame 
 import random
 import time
+import math
 from Personaje3 import Jugador, Enemigo
 
 # Constantes
@@ -12,7 +13,8 @@ WIDTH, HEIGHT = 800, 477
 GROUND_Y = 333
 GAME_OVER_FONT_SIZE = 72
 MENU_FONT_SIZE = 36
-MAX_MONEDAS = 10
+MAX_MONEDAS = 10  # Máximo de monedas para obtener una vida
+TIEMPO_REAPARICION_HONGOS = 8  # Segundos para que reaparezcan los hongos
 
 class Moneda:
     def __init__(self, x, y):
@@ -22,6 +24,15 @@ class Moneda:
         self.image_key = "moneda"
         self.ancho = 30
         self.alto = 30
+        self.tiempo_animacion = 0
+        self.frame_actual = 0
+    
+    def animar(self):
+        # Simple animación para hacer que las monedas giren (simulación)
+        self.tiempo_animacion += 1
+        if self.tiempo_animacion >= 10:  # Cada 10 frames
+            self.tiempo_animacion = 0
+            self.frame_actual = (self.frame_actual + 1) % 4  # 4 frames de animación
 
 class Game:
     def __init__(self):
@@ -31,8 +42,6 @@ class Game:
         self.clock = pygame.time.Clock()
         self.running = True
         self.game_over = False
-        self.victory = False  # Variable para controlar la victoria
-        self.ultimo_segundo = pygame.time.get_ticks() // 1000
 
         self.imgs = {}
         self.load_images()
@@ -54,7 +63,7 @@ class Game:
         # Control de spawneo
         self.goombas_por_oleada = 2
         self.goombas_eliminados_total = 0
-        self.max_goombas_total = 10
+        self.max_goombas_total = 20
         
         # Sistema de monedas
         self.monedas = []
@@ -63,9 +72,18 @@ class Game:
         # Crear primera oleada de Goombas
         self.spawn_oleada_goombas()
 
-        # Ítems
-        self.hongoRojo = self.spawn_item("hongoRojo")
-        self.hongoVerde = self.spawn_item("hongoVerde")
+        # Ítems y sus temporizadores
+        self.hongoRojo = None
+        self.hongoVerde = None
+        self.ultimo_tiempo_hongoRojo = 0
+        self.ultimo_tiempo_hongoVerde = 0
+        
+        # Añadir estrella
+        self.estrella = None
+        self.tiempo_espera_estrella = random.randint(10, 20)  # Segundos antes de que aparezca
+        self.ultimo_tiempo = time.time()
+        self.tiempo_animacion_estrella = 0
+        self.frame_estrella = 0
 
     def spawn_oleada_goombas(self):
         if self.goombas_eliminados_total >= self.max_goombas_total:
@@ -83,11 +101,7 @@ class Game:
 
     def verificar_oleada_completada(self):
         if all(not goomba.vivo for goomba in self.enemigos):
-            if self.goombas_eliminados_total >= self.max_goombas_total:
-                # Si ya eliminamos todos los goombas permitidos, victoria
-                self.victory = True
-            else:
-                self.spawn_oleada_goombas()
+            self.spawn_oleada_goombas()
 
     def limpiar_enemigos_muertos(self):
         current_time = time.time()
@@ -146,20 +160,63 @@ class Game:
         self.imgs["goombaMuerto"] = load_img("goombas_muerte.png", (40, 30))
         # Cargar imagen de la moneda
         self.imgs["moneda"] = load_img("moneda.png", (30, 30))
+        # Cargar imagen de la estrella
+        self.imgs["estrella"] = load_img("estrella.png", (40, 40))
 
     def spawn_item(self, key):
         x = random.randint(0, WIDTH - 40)
         y = 350
         return {"img": self.imgs[key], "pos": [x, y]}
 
+    def actualizar_hongos(self):
+        """Controla la aparición periódica de los hongos cada 8 segundos"""
+        tiempo_actual = time.time()
+        
+        # Hongo Rojo
+        if self.hongoRojo is None and tiempo_actual - self.ultimo_tiempo_hongoRojo >= TIEMPO_REAPARICION_HONGOS:
+            self.hongoRojo = self.spawn_item("hongoRojo")
+            self.ultimo_tiempo_hongoRojo = tiempo_actual
+        
+        # Hongo Verde
+        if self.hongoVerde is None and tiempo_actual - self.ultimo_tiempo_hongoVerde >= TIEMPO_REAPARICION_HONGOS:
+            self.hongoVerde = self.spawn_item("hongoVerde")
+            self.ultimo_tiempo_hongoVerde = tiempo_actual
+
     def add_player(self, jugador, img_key):
         jugador.image_key = img_key
         self.players.append(jugador)
+        
+    def actualizar_estrella(self):
+        tiempo_actual = time.time()
+        
+        # Si no hay estrella activa, controlar su aparición
+        if self.estrella is None:
+            if tiempo_actual - self.ultimo_tiempo > self.tiempo_espera_estrella:
+                x = random.randint(100, WIDTH - 100)
+                y = 350  # Misma altura que los hongos
+                self.estrella = {"img": self.imgs["estrella"], "pos": [x, y], "activa": True}
+                self.ultimo_tiempo = tiempo_actual
+        else:
+            # Animar la estrella (hacerla "flotar" - movimiento vertical suave)
+            self.tiempo_animacion_estrella += 1
+            if self.tiempo_animacion_estrella >= 10:
+                self.tiempo_animacion_estrella = 0
+                self.frame_estrella = (self.frame_estrella + 1) % 8
+                
+            # Movimiento oscilante vertical (sube y baja ligeramente)
+            offset_y = math.sin(self.frame_estrella * 0.25 * math.pi) * 5
+            self.estrella["pos"][1] = 350 + offset_y
 
     def update_stats(self, jugador):
         y = 10
         goombas_vivos = len([e for e in self.enemigos if e.vivo])
         goombas_restantes = self.max_goombas_total - self.goombas_eliminados_total
+        
+        # Verificar si el jugador tiene inmunidad por estrella
+        inmunidad = "No"
+        if hasattr(jugador, 'estrella_activa') and jugador.estrella_activa:
+            tiempo_restante = max(0, jugador.invulnerable_until - time.time())
+            inmunidad = f"Sí ({tiempo_restante:.1f}s)"
         
         stats = [
             ("posicionX", jugador.posicionX),
@@ -168,17 +225,34 @@ class Game:
             ("monedas", jugador.monedas),
             ("puntos", jugador.puntos),
             ("tiempo", jugador.tiempo),
+            ("Inmunidad", inmunidad),
             ("Goombas vivos", goombas_vivos),
             ("Goombas eliminados", f"{self.goombas_eliminados_total}/{self.max_goombas_total}"),
             ("Goombas restantes", goombas_restantes)
         ]
         
         for attr, value in stats:
-            # Color rojo para los goombas restantes cuando sean 0
             color = (255, 0, 0) if attr == "Goombas restantes" and goombas_restantes == 0 else (0, 0, 0)
+            if attr == "Inmunidad" and inmunidad.startswith("Sí"):
+                color = (255, 215, 0)  # Color dorado para la inmunidad activa
             texto_img = self.font.render(f"{attr}: {value}", True, color)
             self.screen.blit(texto_img, (10, y))
             y += 20
+
+    def aplicar_efecto_estrella(self, jugador):
+        # Si el jugador está en estado de estrella, hacerlo parpadear
+        if hasattr(jugador, 'estrella_activa') and jugador.estrella_activa:
+            tiempo_actual = time.time()
+            
+            # Verificar si la inmunidad ha terminado
+            if tiempo_actual > jugador.invulnerable_until:
+                jugador.estrella_activa = False
+                return True  # Siempre visible cuando termina el efecto
+            
+            # Parpadeo basado en el tiempo (aproximadamente 8 veces por segundo)
+            return int(tiempo_actual * 8) % 2 == 0
+        
+        return True  # Siempre visible si no hay efecto de estrella
 
     def draw(self):
         self.screen.blit(self.imgs["fondo"], (0, 0))
@@ -186,7 +260,12 @@ class Game:
         # Dibujar monedas activas
         for moneda in self.monedas:
             if moneda.activa:
+                moneda.animar()  # Animar la moneda
                 self.screen.blit(self.imgs[moneda.image_key], (moneda.posicionX, moneda.posicionY))
+
+        # Dibujar estrella si está activa
+        if self.estrella and self.estrella["activa"]:
+            self.screen.blit(self.estrella["img"], self.estrella["pos"])
 
         if self.hongoRojo:
             self.screen.blit(self.hongoRojo["img"], self.hongoRojo["pos"])
@@ -199,8 +278,10 @@ class Game:
                 self.screen.blit(img, (enemigo.posicionX, enemigo.posicionY))
 
         for jugador in self.players:
-            img = self.imgs[jugador.image_key]
-            self.screen.blit(img, (jugador.posicionX, jugador.posicionY))
+            # Verificar si el jugador debe ser visible (efecto de parpadeo)
+            if self.aplicar_efecto_estrella(jugador):
+                img = self.imgs[jugador.image_key]
+                self.screen.blit(img, (jugador.posicionX, jugador.posicionY))
             self.update_stats(jugador)
 
         pygame.display.flip()
@@ -294,18 +375,41 @@ class Game:
             hongo_rect = pygame.Rect(*self.hongoRojo["pos"], 40, 40)
             if jugador_rect.colliderect(hongo_rect):
                 self.hongoRojo = None
+                self.ultimo_tiempo_hongoRojo = time.time()  # Actualizar el tiempo para la próxima aparición
                 self.crecer_personaje(jugador)
 
         if self.hongoVerde:
             hongo_rect = pygame.Rect(*self.hongoVerde["pos"], 40, 40)
             if jugador_rect.colliderect(hongo_rect):
                 self.hongoVerde = None
+                self.ultimo_tiempo_hongoVerde = time.time()  # Actualizar el tiempo para la próxima aparición
                 jugador.vidas += 1
+        
+        # Colisión con estrella
+        if self.estrella and self.estrella["activa"]:
+            estrella_rect = pygame.Rect(self.estrella["pos"][0], self.estrella["pos"][1], 40, 40)
+            if jugador_rect.colliderect(estrella_rect):
+                self.estrella["activa"] = False
+                self.estrella = None
+                jugador.invulnerable_until = time.time() + 8.0  # 8 segundos de inmunidad
+                jugador.estrella_activa = True 
+                jugador.puntos += 200  # Bonus por coger la estrella
 
         current_time = time.time()
 
+        # Si el jugador tiene invulnerabilidad (por estrella o después de recibir daño)
         if hasattr(jugador, 'invulnerable_until') and current_time < jugador.invulnerable_until:
-            return
+            # Si la inmunidad es por estrella, matar a los enemigos al contacto
+            if hasattr(jugador, 'estrella_activa') and jugador.estrella_activa:
+                for enemigo in self.enemigos:
+                    if enemigo.vivo:
+                        enemigo_rect = pygame.Rect(enemigo.posicionX, enemigo.posicionY, 40, 40)
+                        if jugador_rect.colliderect(enemigo_rect):
+                            enemigo.aplastar()
+                            jugador.puntos += 200  # Más puntos por matar con estrella
+                            self.enemigos_aplastados[enemigo.id] = current_time
+                            self.goombas_eliminados_total += 1
+            return  # No procesar colisiones normales si es invulnerable
 
         for enemigo in self.enemigos:
             if not enemigo.vivo:
@@ -319,11 +423,6 @@ class Game:
                     jugador.puntos += 100
                     self.enemigos_aplastados[enemigo.id] = current_time
                     self.goombas_eliminados_total += 1
-                    
-                    # Verificar si hemos eliminado todos los goombas
-                    if self.goombas_eliminados_total >= self.max_goombas_total:
-                        # Victoria al eliminar todos los goombas
-                        self.victory = True
                 else:
                     if jugador.tamano == "grande":
                         jugador.tamano = 'pequeño'
@@ -369,37 +468,6 @@ class Game:
                         return False
             self.clock.tick(60)
 
-    def show_victory_screen(self):
-        self.screen.fill((0, 0, 0))
-        
-        victory_text = self.game_over_font.render("¡GANASTE!", True, (0, 255, 0))
-        victory_rect = victory_text.get_rect(center=(WIDTH//2, HEIGHT//2 - 50))
-        self.screen.blit(victory_text, victory_rect)
-        
-        # Mostrar puntuación final
-        jugador = self.players[0]
-        score_text = self.menu_font.render(f"Puntuación: {jugador.puntos}", True, (255, 255, 255))
-        score_rect = score_text.get_rect(center=(WIDTH//2, HEIGHT//2))
-        self.screen.blit(score_text, score_rect)
-        
-        instruction_text = self.menu_font.render("Presiona ENTER para reiniciar", True, (255, 255, 255))
-        instruction_rect = instruction_text.get_rect(center=(WIDTH//2, HEIGHT//2 + 50))
-        self.screen.blit(instruction_text, instruction_rect)
-        
-        pygame.display.flip()
-        
-        waiting = True
-        while waiting:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    return False
-                if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_RETURN:
-                        return True
-                    elif event.key == pygame.K_ESCAPE:
-                        return False
-            self.clock.tick(60)
-
     def reset_game(self):
         self.players = []
         p1 = Jugador(1, "Jugador1", 200, GROUND_Y)
@@ -416,22 +484,25 @@ class Game:
         
         self.spawn_oleada_goombas()
         
-        self.hongoRojo = self.spawn_item("hongoRojo")
-        self.hongoVerde = self.spawn_item("hongoVerde")
+        # Reiniciar hongos y sus temporizadores
+        self.hongoRojo = None
+        self.hongoVerde = None
+        self.ultimo_tiempo_hongoRojo = 0
+        self.ultimo_tiempo_hongoVerde = 0
+        
+        # Reiniciar estrella
+        self.estrella = None
+        self.tiempo_espera_estrella = random.randint(10, 20)
+        self.ultimo_tiempo = time.time()
+        self.tiempo_animacion_estrella = 0
+        self.frame_estrella = 0
         
         self.game_over = False
-        self.victory = False
 
     def run(self):
         while self.running:
             if self.game_over:
                 if self.show_game_over_screen():
-                    self.reset_game()
-                else:
-                    self.running = False
-                    break
-            elif self.victory:
-                if self.show_victory_screen():
                     self.reset_game()
                 else:
                     self.running = False
@@ -450,8 +521,10 @@ class Game:
 
             self.verificar_oleada_completada()
             self.limpiar_enemigos_muertos()
+            self.actualizar_estrella()  # Actualizar estado de la estrella
+            self.actualizar_hongos()    # Actualizar estado de los hongos
             self.check_collisions(self.players[0])
-            self.check_monedas()
+            self.check_monedas()  # Verificar estado de las monedas
             self.draw()
 
         pygame.quit()
