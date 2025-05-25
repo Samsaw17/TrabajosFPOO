@@ -180,13 +180,13 @@ class Game:
                 }
                 self.ultimo_tiempo_estrella = tiempo_actual
         else:
-            # Animar la estrella
+            # Animacion de la estrella
             self.tiempo_animacion_estrella += 1
             if self.tiempo_animacion_estrella >= 10:
                 self.tiempo_animacion_estrella = 0
                 self.frame_estrella = (self.frame_estrella + 1) % 8
                 
-            # Movimiento oscilante vertical
+            
             offset_y = math.sin(self.frame_estrella * 0.25 * math.pi) * 5
             self.estrella["pos"][1] = 350 + offset_y
 
@@ -382,7 +382,7 @@ class Game:
             if jugador_rect.colliderect(estrella_rect):
                 self.estrella["activa"] = False
                 self.estrella = None
-                jugador.invulnerable_until = time.time() + 8.0  # 8 segundos de inmunidad
+                jugador.invulnerable_until = time.time() + 8.0 
                 jugador.estrella_activa = True
                 jugador.puntos += 200
                 self.ultimo_tiempo_estrella = time.time()
@@ -390,9 +390,9 @@ class Game:
         
         current_time = time.time()
         
-        # Si el jugador tiene inmunidad por estrella
+        # Si tiene inmunidad por la estrellas
         if hasattr(jugador, 'estrella_activa') and jugador.estrella_activa:
-            # Matar enemigos al contacto
+            # Mata a los enemigos
             for enemigo in self.enemigos:
                 if enemigo.vivo:
                     enemigo_rect = pygame.Rect(enemigo.posicionX, enemigo.posicionY, 40, 40)
@@ -403,7 +403,7 @@ class Game:
                         self.goombas_eliminados_total += 1
             return
         
-        # Colisiones normales con enemigos
+        
         if hasattr(jugador, 'invulnerable_until') and current_time < jugador.invulnerable_until:
             return
         
@@ -511,7 +511,7 @@ class Game:
         self.hongoRojo = self.spawn_item("hongoRojo", 300, 350)
         self.hongoVerde = self.spawn_item("hongoVerde", 600, 350)
         
-        # Reiniciar estrella
+        
         self.estrella = None
         self.tiempo_espera_estrella = random.randint(10, 20)
         self.ultimo_tiempo_estrella = time.time()
