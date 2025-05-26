@@ -3,6 +3,7 @@ import random
 import time
 import math
 from Personaje3 import Jugador, Enemigo
+from Moneda import Moneda
 
 # Constantes
 PASO_X = 10
@@ -15,15 +16,6 @@ GAME_OVER_FONT_SIZE = 72
 MENU_FONT_SIZE = 36
 MAX_MONEDAS = 10
 TIEMPO_REAPARICION_ESTRELLA = 10
-
-class Moneda:
-    def __init__(self, x, y):
-        self.posicionX = x
-        self.posicionY = y
-        self.activa = True
-        self.image_key = "moneda"
-        self.ancho = 30
-        self.alto = 30
 
 class Game:
     def __init__(self):
