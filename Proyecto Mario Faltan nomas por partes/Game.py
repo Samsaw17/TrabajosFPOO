@@ -4,7 +4,6 @@ import time
 import math
 from Personaje import Jugador, Enemigo, Koopa
 from Sound import Sound
-from Moneda import Moneda
 
 # Constantes
 PASO_X = 10
@@ -17,6 +16,15 @@ GAME_OVER_FONT_SIZE = 72
 MENU_FONT_SIZE = 36
 MAX_MONEDAS = 10
 TIEMPO_REAPARICION_ESTRELLA = 10
+
+class Moneda:
+    def __init__(self, x, y):
+        self.posicionX = x
+        self.posicionY = y
+        self.activa = True
+        self.image_key = "moneda"
+        self.ancho = 30
+        self.alto = 30
 
 class Game:
     def __init__(self):
@@ -99,7 +107,6 @@ class Game:
         
         for _ in range(koopas_a_crear):
             koopa = Koopa(100, self.goomba_id_counter)
-            # Posicionamiento inicial específico
             if koopa.direccion_caida == "izquierda":
                 koopa.posicionX = 750 
             else:
@@ -109,10 +116,8 @@ class Game:
             self.goomba_id_counter += 1
 
     def verificar_oleada_completada(self):
-        # Verificar Goombas
         if all(not goomba.vivo for goomba in self.enemigos):
             if self.goombas_eliminados_total >= self.max_goombas_total:
-                
                 if self.koopas_eliminados_total >= self.max_koopas_total:
                     self.victory = True
                 else:
@@ -120,7 +125,6 @@ class Game:
             else:
                 self.spawn_oleada_goombas()
         
-        # Verificar Koopas
         if all(not koopa.vivo for koopa in self.koopas):
             if self.koopas_eliminados_total < self.max_koopas_total:
                 self.spawn_oleada_koopas()
@@ -220,13 +224,11 @@ class Game:
                 }
                 self.ultimo_tiempo_estrella = tiempo_actual
         else:
-            # Animar la estrella
             self.tiempo_animacion_estrella += 1
             if self.tiempo_animacion_estrella >= 10:
                 self.tiempo_animacion_estrella = 0
                 self.frame_estrella = (self.frame_estrella + 1) % 8
                 
-            # Movimiento oscilante vertical
             offset_y = math.sin(self.frame_estrella * 0.25 * math.pi) * 5
             self.estrella["pos"][1] = 350 + offset_y
 
@@ -253,6 +255,9 @@ class Game:
         if hasattr(jugador, 'estrella_activa') and jugador.estrella_activa:
             tiempo_restante = max(0, jugador.invulnerable_until - time.time())
             inmunidad = f"Sí ({tiempo_restante:.1f}s)"
+        elif hasattr(jugador, 'invulnerable_until') and time.time() < jugador.invulnerable_until:
+            tiempo_restante = max(0, jugador.invulnerable_until - time.time())
+            inmunidad = f"Parpadeo ({tiempo_restante:.1f}s)"
         
         stats = [
             ("posicionX", jugador.posicionX),
@@ -272,6 +277,8 @@ class Game:
             color = (255, 0, 0) if attr == "Enemigos restantes" and (goombas_restantes + koopas_restantes) == 0 else (0, 0, 0)
             if attr == "Inmunidad" and inmunidad.startswith("Sí"):
                 color = (255, 215, 0)
+            elif attr == "Inmunidad" and inmunidad.startswith("Parpadeo"):
+                color = (255, 165, 0)
             texto_img = self.font.render(f"{attr}: {value}", True, color)
             self.screen.blit(texto_img, (10, y))
             y += 20
@@ -318,9 +325,29 @@ class Game:
                 self.screen.blit(img, (koopa.posicionX, koopa.posicionY))
 
         for jugador in self.players:
-            if self.aplicar_efecto_estrella(jugador):
+            # Primero verificar inmunidad por estrella
+            if hasattr(jugador, 'estrella_activa') and jugador.estrella_activa:
+                if self.aplicar_efecto_estrella(jugador):
+                    img = self.imgs[jugador.image_key]
+                    self.screen.blit(img, (jugador.posicionX, jugador.posicionY))
+            # Luego verificar inmunidad por parpadeo (al perder vida)
+            elif hasattr(jugador, 'invulnerable_until'):
+                current_time = time.time()
+                if current_time < jugador.invulnerable_until:
+                    # Parpadeo: visible solo en frames pares (cada 0.1 segundos)
+                    if int(current_time * 10) % 2 == 0:
+                        img = self.imgs[jugador.image_key]
+                        self.screen.blit(img, (jugador.posicionX, jugador.posicionY))
+                else:
+                    # Eliminar el atributo cuando termina la invulnerabilidad
+                    del jugador.invulnerable_until
+                    img = self.imgs[jugador.image_key]
+                    self.screen.blit(img, (jugador.posicionX, jugador.posicionY))
+            else:
+                # Dibujar normalmente si no está invulnerable
                 img = self.imgs[jugador.image_key]
                 self.screen.blit(img, (jugador.posicionX, jugador.posicionY))
+            
             self.update_stats(jugador)
 
         pygame.display.flip()
@@ -395,49 +422,6 @@ class Game:
         jugador_height = 60 if jugador.tamano == "grande" else 50
         jugador_rect = pygame.Rect(jugador.posicionX, jugador.posicionY, 50, jugador_height)
         
-        # Colisión con monedas
-        for moneda in self.monedas:
-            if moneda.activa:
-                moneda_rect = pygame.Rect(moneda.posicionX, moneda.posicionY, moneda.ancho, moneda.alto)
-                if jugador_rect.colliderect(moneda_rect):
-                    moneda.activa = False
-                    jugador.monedas += 1
-                    jugador.puntos += 50
-                    self.sound.play('moneda')
-        
-        if jugador.monedas >= MAX_MONEDAS:
-            jugador.vidas += 1
-            jugador.monedas = 0
-        
-        # Colisión con hongos
-        tiempo_actual = pygame.time.get_ticks() // 1000
-        
-        if self.hongoRojo["visible"]:
-            hongo_rect = pygame.Rect(*self.hongoRojo["pos"], 40, 40)
-            if jugador_rect.colliderect(hongo_rect):
-                self.hongoRojo["visible"] = False
-                self.hongoRojo["ultimo_recogido"] = tiempo_actual
-                self.crecer_personaje(jugador)
-        
-        if self.hongoVerde["visible"]:
-            hongo_rect = pygame.Rect(*self.hongoVerde["pos"], 40, 40)
-            if jugador_rect.colliderect(hongo_rect):
-                self.hongoVerde["visible"] = False
-                self.hongoVerde["ultimo_recogido"] = tiempo_actual
-                jugador.vidas += 1
-        
-        # Colisión con estrella
-        if self.estrella and self.estrella["activa"]:
-            estrella_rect = pygame.Rect(self.estrella["pos"][0], self.estrella["pos"][1], 40, 40)
-            if jugador_rect.colliderect(estrella_rect):
-                self.estrella["activa"] = False
-                self.estrella = None
-                jugador.invulnerable_until = time.time() + 8.0  # 8 segundos de inmunidad
-                jugador.estrella_activa = True
-                jugador.puntos += 200
-                self.ultimo_tiempo_estrella = time.time()
-                self.tiempo_espera_estrella = random.randint(10, 20)
-        
         current_time = time.time()
         
         # Si el jugador tiene inmunidad por estrella
@@ -454,47 +438,94 @@ class Game:
                             self.goombas_eliminados_total += 1
                         else:
                             self.koopas_eliminados_total += 1
-            return
+            # Permitir recolectar otros ítems normalmente
+            pass
+        # Si el jugador está en modo invulnerable (parpadeo), no procesar colisiones con enemigos
+        elif hasattr(jugador, 'invulnerable_until') and current_time < jugador.invulnerable_until:
+            pass  # Permitir recolectar ítems pero no recibir daño
+        else:
+            # Colisión con enemigos (solo si no está invulnerable)
+            for enemigo in self.enemigos + self.koopas:
+                if not enemigo.vivo:
+                    continue
+                
+                enemigo_rect = pygame.Rect(enemigo.posicionX, enemigo.posicionY, 40, 40)
+                
+                if jugador_rect.colliderect(enemigo_rect):
+                    if jugador_rect.bottom <= enemigo_rect.top + 10 and jugador.saltando:
+                        enemigo.aplastar()
+                        jugador.puntos += 100
+                        self.enemigos_aplastados[enemigo.id] = current_time
+                        if enemigo in self.enemigos:
+                            self.goombas_eliminados_total += 1
+                        else:
+                            self.koopas_eliminados_total += 1
+                        
+                        if (self.goombas_eliminados_total >= self.max_goombas_total and 
+                            self.koopas_eliminados_total >= self.max_koopas_total):
+                            self.victory = True
+                    else:
+                        if jugador.tamano == "grande":
+                            jugador.tamano = 'pequeño'
+                            jugador.image_key = "inicial" if jugador.direccion == "derecha" else "inicialI"
+                            # No activar invulnerabilidad al cambiar de grande a pequeño
+                        else:
+                            jugador.vidas -= 1
+                            if jugador.vidas <= 0:
+                                self.sound.play('muerte')
+                                self.game_over = True
+                            
+                            # Activar invulnerabilidad por 2 segundos solo al perder una vida
+                            jugador.invulnerable_until = current_time + 2.0
+                        
+                        # Empujar al jugador lejos del enemigo (en ambos casos)
+                        if jugador.posicionX < enemigo.posicionX:
+                            jugador.posicionX = max(0, jugador.posicionX - 50)
+                        else:
+                            jugador.posicionX = min(WIDTH - 50, jugador.posicionX + 50)
         
-        # Colisiones normales con enemigos
-        if hasattr(jugador, 'invulnerable_until') and current_time < jugador.invulnerable_until:
-            return
+        # Colisión con monedas (siempre activa)
+        for moneda in self.monedas:
+            if moneda.activa:
+                moneda_rect = pygame.Rect(moneda.posicionX, moneda.posicionY, moneda.ancho, moneda.alto)
+                if jugador_rect.colliderect(moneda_rect):
+                    moneda.activa = False
+                    jugador.monedas += 1
+                    jugador.puntos += 50
+                    self.sound.play('moneda')
         
-        for enemigo in self.enemigos + self.koopas:
-            if not enemigo.vivo:
-                continue
-            
-            enemigo_rect = pygame.Rect(enemigo.posicionX, enemigo.posicionY, 40, 40)
-            
-            if jugador_rect.colliderect(enemigo_rect):
-                if jugador_rect.bottom <= enemigo_rect.top + 10 and jugador.saltando:
-                    enemigo.aplastar()
-                    jugador.puntos += 100
-                    self.enemigos_aplastados[enemigo.id] = current_time
-                    if enemigo in self.enemigos:
-                        self.goombas_eliminados_total += 1
-                    else:
-                        self.koopas_eliminados_total += 1
-                    
-                    if (self.goombas_eliminados_total >= self.max_goombas_total and 
-                        self.koopas_eliminados_total >= self.max_koopas_total):
-                        self.victory = True
-                else:
-                    if jugador.tamano == "grande":
-                        jugador.tamano = 'pequeño'
-                        jugador.image_key = "inicial" if jugador.direccion == "derecha" else "inicialI"
-                    else:
-                        jugador.vidas -= 1
-                        if jugador.vidas <= 0:
-                            self.sound.play('muerte')
-                            self.game_over = True
-                    
-                    jugador.invulnerable_until = current_time + 1.0
-                    
-                    if jugador.posicionX < enemigo.posicionX:
-                        jugador.posicionX = max(0, jugador.posicionX - 50)
-                    else:
-                        jugador.posicionX = min(WIDTH - 50, jugador.posicionX + 50)
+        if jugador.monedas >= MAX_MONEDAS:
+            jugador.vidas += 1
+            jugador.monedas = 0
+        
+        # Colisión con hongos (siempre activa)
+        tiempo_actual = pygame.time.get_ticks() // 1000
+        
+        if self.hongoRojo["visible"]:
+            hongo_rect = pygame.Rect(*self.hongoRojo["pos"], 40, 40)
+            if jugador_rect.colliderect(hongo_rect):
+                self.hongoRojo["visible"] = False
+                self.hongoRojo["ultimo_recogido"] = tiempo_actual
+                self.crecer_personaje(jugador)
+        
+        if self.hongoVerde["visible"]:
+            hongo_rect = pygame.Rect(*self.hongoVerde["pos"], 40, 40)
+            if jugador_rect.colliderect(hongo_rect):
+                self.hongoVerde["visible"] = False
+                self.hongoVerde["ultimo_recogido"] = tiempo_actual
+                jugador.vidas += 1
+        
+        # Colisión con estrella (siempre activa)
+        if self.estrella and self.estrella["activa"]:
+            estrella_rect = pygame.Rect(self.estrella["pos"][0], self.estrella["pos"][1], 40, 40)
+            if jugador_rect.colliderect(estrella_rect):
+                self.estrella["activa"] = False
+                self.estrella = None
+                jugador.invulnerable_until = time.time() + 8.0  # 8 segundos de inmunidad
+                jugador.estrella_activa = True
+                jugador.puntos += 200
+                self.ultimo_tiempo_estrella = time.time()
+                self.tiempo_espera_estrella = random.randint(10, 20)
 
     def crecer_personaje(self, jugador):
         jugador.tamano = 'grande'
@@ -572,7 +603,6 @@ class Game:
         self.hongoRojo = self.spawn_item("hongoRojo", 300, 350)
         self.hongoVerde = self.spawn_item("hongoVerde", 600, 350)
         
-        # Reiniciar estrella
         self.estrella = None
         self.tiempo_espera_estrella = random.randint(10, 20)
         self.ultimo_tiempo_estrella = time.time()
